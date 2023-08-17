@@ -12,6 +12,7 @@ library("stringr")
 library(Metrics)
 library(ggplot2)
 library(tidyr)
+library(knitr)
 ```
 
 
@@ -106,22 +107,24 @@ lm_model_weather <- workflow() %>%
 
 lm_model_weather <- fit(lm_model_weather, data = train_data)
 
-print(lm_model_weather$fit)
+coefficients <- lm_model_weather$fit$fit$fit$coefficients
+coefficients_df <- as.data.frame(t(coefficients), row.names = "Coefficients")
+
+kable(coefficients_df, caption = "Summary of Weather Model")
 ```
 
 Coefficients:
 
-Intercept: The constant term in the model, 150.87. This value represents the predicted RENTED_BIKE_COUNT when all predictors are zero.
-TEMPERATURE: The coefficient 2336.56 means that for each one-unit increase in temperature (in Celsius), the rented bike count is expected to increase by approximately 2336.56 units, holding other variables constant.
-HUMIDITY: The coefficient -908.47 means that for each 1% increase in humidity, the rented bike count is expected to decrease by approximately 908.47 units, holding other variables constant.
-WIND_SPEED: The coefficient 392.39 means that for each one-unit increase in wind speed (in m/s), the rented bike count is expected to increase by approximately 392.39 units.
-VISIBILITY: The coefficient 12.29 represents the increase in rented bike count for each 10-meter increase in visibility.
-DEW_POINT_TEMPERATURE: A coefficient of -271.09 indicates that for each one-unit increase in dew point temperature (in Celsius), the rented bike count is expected to decrease by approximately 271.09 units.
-SOLAR_RADIATION: A coefficient of -417.46 represents the decrease in rented bike count for each one-unit increase in solar radiation (in MJ/m^2).
-RAINFALL: The coefficient -1903.68 shows that for each mm increase in rainfall, the rented bike count is expected to decrease by approximately 1903.68 units.
-SNOWFALL: The coefficient 321.24 means that for each cm increase in snowfall, the rented bike count is expected to increase by approximately 321.24 units.
+  * Intercept: The constant term in the model, 150.87. This value represents the predicted RENTED_BIKE_COUNT when all predictors are zero.
+  * TEMPERATURE: The coefficient 2336.56 means that for each one-unit increase in temperature (in Celsius), the rented bike count is expected to increase by approximately 2336.56 units, holding other variables constant.
+  * HUMIDITY: The coefficient -908.47 means that for each 1% increase in humidity, the rented bike count is expected to decrease by approximately 908.47 units, holding other variables constant.
+  * WIND_SPEED: The coefficient 392.39 means that for each one-unit increase in wind speed (in m/s), the rented bike count is expected to increase by approximately 392.39 units.
+  * VISIBILITY: The coefficient 12.29 represents the increase in rented bike count for each 10-meter increase in visibility.
+  * DEW_POINT_TEMPERATURE: A coefficient of -271.09 indicates that for each one-unit increase in dew point temperature (in Celsius), the rented bike count is expected to decrease by approximately 271.09 units.
+  * SOLAR_RADIATION: A coefficient of -417.46 represents the decrease in rented bike count for each one-unit increase in solar radiation (in MJ/m^2).
+  * RAINFALL: The coefficient -1903.68 shows that for each mm increase in rainfall, the rented bike count is expected to decrease by approximately 1903.68 units.
+  * SNOWFALL: The coefficient 321.24 means that for each cm increase in snowfall, the rented bike count is expected to increase by approximately 321.24 units.
 
----
 In the bustling city, where bike rentals are a popular means of transportation, the weather plays an intriguing role in shaping people's choices. As the sun rises and the temperature begins to climb, so too does the demand for bikes. For every degree Celsius increase in temperature, there's a remarkable surge in bike rentals by approximately 2336.56 units. It seems that the warmth of the sun entices more people to ride.
 
 But not all weather factors have such a welcoming effect. As humidity levels rise, the appeal of biking diminishes. A 1% increase in humidity corresponds to a decrease in bike rentals by around 908.47 units. The sticky, heavy air appears to discourage riders.
@@ -138,23 +141,24 @@ Solar radiation and dew point temperature also play their parts, but their effec
 
 In this complex tapestry of weather factors, bike rentals ebb and flow like the changing seasons. The story of bike rentals is one of adaptation, where the demand for bikes is a dance with nature, intertwined with the elements of weather. It paints a picture of a city in motion, a city that responds and changes, embracing the sun's warmth and retreating from the rain, all on two wheels.
 
-----
-Temperature: Warmer weather significantly boosts bike rentals.
-Humidity: Higher humidity levels reduce the appeal of bike riding.
-Wind Speed: Moderate wind speeds are associated with more rentals, possibly enhancing the riding experience.
-Visibility: Clearer visibility has a slight positive impact on rentals, potentially due to perceived safety.
-Dew Point and Solar Radiation: These factors subtly reduce rentals, but the reasons may require further investigation.
-Rainfall: Rain has a strong negative impact on rentals, with people likely choosing other transportation methods.
-Snowfall: An increase in snow surprisingly leads to more rentals, possibly attracting more adventurous riders.
-Overall, the weather plays a complex role in bike rental demand, with clear and warm weather generally promoting rentals, and extreme conditions like heavy rain acting as a deterrent. The insights can guide marketing and operational strategies, such as offering promotions on sunny days or providing additional services during rain.
 
-ASK: Build a linear regression model using all variables
+  * Temperature: Warmer weather significantly boosts bike rentals.
+  * Humidity: Higher humidity levels reduce the appeal of bike riding.
+  * Wind Speed: Moderate wind speeds are associated with more rentals, possibly enhancing the riding experience.
+  * Visibility: Clearer visibility has a slight positive impact on rentals, potentially due to perceived safety.
+  * Dew Point and Solar Radiation: These factors subtly reduce rentals, but the reasons may require further investigation.
+  * Rainfall: Rain has a strong negative impact on rentals, with people likely choosing other transportation methods.
+  * Snowfall: An increase in snow surprisingly leads to more rentals, possibly attracting more adventurous riders.
+
+Overall, the weather plays a complex role in bike rental demand, with clear and warm weather generally promoting rentals, and extreme conditions like   * heavy rain acting as a deterrent. The insights can guide marketing and operational strategies, such as offering promotions on sunny days or providing additional services during rain.
+
+#### ASK: Build a linear regression model using all variables 
+
 In addition to weather, there could be other factors that may affect bike rental demand, such as the time of a day or if today is a holiday or not.
 
 Next, let's build a linear regression model using all variables (weather + date/time) in this task.
 
 TODO: Build a linear regression model called lm_model_all using all variables RENTED_BIKE_COUNT ~ .
-
 Print the fit summary for lm_model_all.
 
 ```{r}
@@ -167,8 +171,6 @@ lm_model_all <- workflow() %>%
   add_formula(RENTED_BIKE_COUNT ~ .)  
 
 lm_model_all <- fit(lm_model_all, data = train_data)
-
-lm_fit <- fit_lm_model_all$fit$fit
 
 # Print the summary of the lm object
 summary(lm_model_all$fit$fit$fit)
