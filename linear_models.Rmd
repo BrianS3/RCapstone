@@ -1,0 +1,317 @@
+---
+title: "linear_models"
+author: "Brian Seko"
+date: "2023-08-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("tidymodels")
+library("tidyverse")
+library("stringr")
+library(Metrics)
+library(ggplot2)
+library(tidyr)
+```
+
+
+The seoul_bike_sharing_converted_normalized.csv will be our main dataset which has following variables:
+
+The response variable:
+
+RENTED BIKE COUNT- Count of bikes rented at each hour
+Weather predictor variables:
+
+TEMPERATURE - Temperature in Celsius
+HUMIDITY - Unit is %
+WIND_SPEED - Unit is m/s
+VISIBILITY - Multiplied by 10m
+DEW_POINT_TEMPERATURE - The temperature to which the air would have to cool down in order to reach saturation, unit is Celsius
+SOLAR_RADIATION - MJ/m2
+RAINFALL - mm
+SNOWFALL - cm
+Date/time predictor variables:
+
+DATE - Year-month-day
+HOUR- Hour of he day
+FUNCTIONAL DAY - NoFunc(Non Functional Hours), Fun(Functional hours)
+HOLIDAY - Holiday/No holiday
+SEASONS - Winter, Spring, Summer, Autumn
+
+
+Let's read the dataset as a dataframe first:
+
+```{r}
+# Dataset URL
+dataset_url <- "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-RP0321EN-SkillsNetwork/labs/datasets/seoul_bike_sharing_converted_normalized.csv"
+bike_sharing_df <- read_csv(dataset_url)
+spec(bike_sharing_df)
+```
+
+
+We won't be using the DATE column, because 'as is', it basically acts like an data entry index. (However, given more time, we could use the DATE colum to create a 'day of week' or 'isWeekend' column, which we might expect has an affect on preferred bike rental times.) We also do not need the FUNCTIONAL DAY column because it only has one distinct value remaining (YES) after missing value processing.
+
+
+```{r}
+bike_sharing_df <- bike_sharing_df %>% 
+                   select(-DATE, -FUNCTIONING_DAY)
+```
+
+
+TASK: Split training and testing data
+First, we need to split the full dataset into training and testing datasets.
+
+The training dataset will be used for fitting regression models, and the testing dataset will be used to evaluate the trained models.
+
+TODO: Use the initial_split(), training(), and testing() functions to generate a training dataset consisting of 75% of the original dataset, and a testing dataset using the remaining 25%.
+
+
+```{r}
+data_split <- initial_split(bike_sharing_df, prop = 0.75)
+
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+
+TASK: Build a linear regression model using weather variables only
+As you could imagine, weather conditions may affect people's bike renting decisions. For example, on a cold and rainy day, you may choose alternate transportation such as a bus or taxi. While on a nice sunny day, you may want to rent a bike for a short-distance travel.
+
+Thus, can we predict a city's bike-sharing demand based on its local weather information? Let's try to build a regression model to do that.
+
+TODO: Build a linear regression model called lm_model_weather using the following variables:
+
+TEMPERATURE - Temperature in Celsius
+HUMIDITY - Unit is %
+WIND_SPEED - Unit is m/s
+VISIBILITY - Multiplied by 10m
+DEW_POINT_TEMPERATURE - The temperature to which the air would have to cool down in order to reach saturation, unit is Celsius
+SOLAR_RADIATION - MJ/m2
+RAINFALL - mm
+SNOWFALL - cm
+Define a linear regression model specification.
+
+Fit a model with the response variable RENTED_BIKE_COUNT and predictor variables TEMPERATURE + HUMIDITY + WIND_SPEED + VISIBILITY + DEW_POINT_TEMPERATURE + SOLAR_RADIATION + RAINFALL + SNOWFALL
+
+```{r}
+lm_model_weather_spec <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+weather_recipe <- recipe(RENTED_BIKE_COUNT ~ TEMPERATURE + HUMIDITY + WIND_SPEED + VISIBILITY + DEW_POINT_TEMPERATURE + SOLAR_RADIATION + RAINFALL + SNOWFALL, data = train_data)
+
+lm_model_weather <- workflow() %>%
+  add_model(lm_model_weather_spec) %>%
+  add_recipe(weather_recipe)
+
+lm_model_weather <- fit(lm_model_weather, data = train_data)
+
+print(lm_model_weather$fit)
+```
+
+Coefficients:
+
+Intercept: The constant term in the model, 150.87. This value represents the predicted RENTED_BIKE_COUNT when all predictors are zero.
+TEMPERATURE: The coefficient 2336.56 means that for each one-unit increase in temperature (in Celsius), the rented bike count is expected to increase by approximately 2336.56 units, holding other variables constant.
+HUMIDITY: The coefficient -908.47 means that for each 1% increase in humidity, the rented bike count is expected to decrease by approximately 908.47 units, holding other variables constant.
+WIND_SPEED: The coefficient 392.39 means that for each one-unit increase in wind speed (in m/s), the rented bike count is expected to increase by approximately 392.39 units.
+VISIBILITY: The coefficient 12.29 represents the increase in rented bike count for each 10-meter increase in visibility.
+DEW_POINT_TEMPERATURE: A coefficient of -271.09 indicates that for each one-unit increase in dew point temperature (in Celsius), the rented bike count is expected to decrease by approximately 271.09 units.
+SOLAR_RADIATION: A coefficient of -417.46 represents the decrease in rented bike count for each one-unit increase in solar radiation (in MJ/m^2).
+RAINFALL: The coefficient -1903.68 shows that for each mm increase in rainfall, the rented bike count is expected to decrease by approximately 1903.68 units.
+SNOWFALL: The coefficient 321.24 means that for each cm increase in snowfall, the rented bike count is expected to increase by approximately 321.24 units.
+
+---
+In the bustling city, where bike rentals are a popular means of transportation, the weather plays an intriguing role in shaping people's choices. As the sun rises and the temperature begins to climb, so too does the demand for bikes. For every degree Celsius increase in temperature, there's a remarkable surge in bike rentals by approximately 2336.56 units. It seems that the warmth of the sun entices more people to ride.
+
+But not all weather factors have such a welcoming effect. As humidity levels rise, the appeal of biking diminishes. A 1% increase in humidity corresponds to a decrease in bike rentals by around 908.47 units. The sticky, heavy air appears to discourage riders.
+
+The wind, too, has its role in this story. A gentle breeze might be seen as a pleasant companion on a bike ride. For every meter per second increase in wind speed, bike rentals grow by 392.39 units. Perhaps the wind in the face is a refreshing sensation for some riders.
+
+Visibility, though having a smaller impact, still contributes to the decision-making process. Every additional 10 meters of visibility increase bike rentals by 12.29 units, illustrating how clear days might make the roads feel safer and more inviting.
+
+On the contrary, rainfall is the nemesis of the bike rental business. A single millimeter of rain corresponds to a drastic decline in bike rentals by 1903.68 units. People seem to abandon the idea of biking and seek shelter or alternative means of transportation as raindrops begin to fall.
+
+Snowfall, surprisingly, has a positive effect, increasing bike rentals by 321.24 units for every centimeter of snow. Perhaps the allure of a winter wonderland ride appeals to some adventurous souls.
+
+Solar radiation and dew point temperature also play their parts, but their effects are more subtle and nuanced. A decrease in rentals occurs with an increase in both solar radiation and dew point temperature, by 417.46 and 271.09 units respectively.
+
+In this complex tapestry of weather factors, bike rentals ebb and flow like the changing seasons. The story of bike rentals is one of adaptation, where the demand for bikes is a dance with nature, intertwined with the elements of weather. It paints a picture of a city in motion, a city that responds and changes, embracing the sun's warmth and retreating from the rain, all on two wheels.
+
+----
+Temperature: Warmer weather significantly boosts bike rentals.
+Humidity: Higher humidity levels reduce the appeal of bike riding.
+Wind Speed: Moderate wind speeds are associated with more rentals, possibly enhancing the riding experience.
+Visibility: Clearer visibility has a slight positive impact on rentals, potentially due to perceived safety.
+Dew Point and Solar Radiation: These factors subtly reduce rentals, but the reasons may require further investigation.
+Rainfall: Rain has a strong negative impact on rentals, with people likely choosing other transportation methods.
+Snowfall: An increase in snow surprisingly leads to more rentals, possibly attracting more adventurous riders.
+Overall, the weather plays a complex role in bike rental demand, with clear and warm weather generally promoting rentals, and extreme conditions like heavy rain acting as a deterrent. The insights can guide marketing and operational strategies, such as offering promotions on sunny days or providing additional services during rain.
+
+ASK: Build a linear regression model using all variables
+In addition to weather, there could be other factors that may affect bike rental demand, such as the time of a day or if today is a holiday or not.
+
+Next, let's build a linear regression model using all variables (weather + date/time) in this task.
+
+TODO: Build a linear regression model called lm_model_all using all variables RENTED_BIKE_COUNT ~ .
+
+Print the fit summary for lm_model_all.
+
+```{r}
+lm_model_all_spec <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+lm_model_all <- workflow() %>%
+  add_model(lm_model_all_spec) %>%
+  add_formula(RENTED_BIKE_COUNT ~ .)  
+
+lm_model_all <- fit(lm_model_all, data = train_data)
+
+lm_fit <- fit_lm_model_all$fit$fit
+
+# Print the summary of the lm object
+summary(lm_model_all$fit$fit$fit)
+
+```
+
+
+1. **Call**: Shows the function and parameters used to build the model.
+
+2. **Residuals**: Residuals are the differences between the observed and predicted values. You can see the minimum, 1st quartile, median, 3rd quartile, and maximum residual values.
+
+3. **Coefficients**: This is where the magic happens. Here's what each column means:
+   - **Estimate**: The estimated effect of each predictor on the target variable.
+   - **Std. Error**: Standard error of the estimate; smaller values indicate more reliable estimates.
+   - **t value**: The t-statistic, used to test the null hypothesis that the coefficient is zero.
+   - **Pr(>|t|)**: The p-value; small values (typically less than 0.05) suggest that the coefficient is significantly different from zero.
+   - **Signif. codes**: Asterisks denote significance levels. Three asterisks (e.g. `***`) indicate a highly significant coefficient.
+
+4. **Singularities**: Some coefficients are not defined due to singularities. This means that there are linear dependencies among the predictors. For example, having "WINTER" and "NO_HOLIDAY" as undefined could be due to perfect collinearity with other season and holiday-related variables.
+
+5. **Residual standard error**: Gives an idea of the spread of residuals around the fitted line. Lower values are usually better.
+
+6. **Multiple R-squared**: Represents the proportion of variance in the dependent variable explained by the model. Higher values are generally better, indicating a better fit.
+
+7. **Adjusted R-squared**: Similar to R-squared but adjusted for the number of predictors in the model. It's a more balanced measure of goodness-of-fit, especially when dealing with a large number of predictors.
+
+8. **F-statistic**: A test statistic for the overall significance of the model. A significant p-value here (< 2.2e-16) indicates that at least one of the predictors is related to the response variable.
+
+Interpreting the coefficients in the context of bike rentals, for example, the coefficient for `TEMPERATURE` is 664.763, suggesting that for every unit increase in temperature, you can expect an increase of approximately 664.76 in the rented bike count.
+
+
+----
+ASK: Model evaluation and identification of important variables
+Now that you have built two regression models, lm_model_weather and lm_model_all, with different predictor variables, you need to compare their performance to see which one is better.
+
+In this project, you will be asked to use very important metrics that are often used in Statistics to determine the performance of a model:
+
+R^2 / R-squared
+Root Mean Squared Error (RMSE)
+R-squared
+
+R squared, also known as the coefficient of determination, is a measure to indicate how close the data is to the fitted regression line. The value of R-squared is the percentage of variation of the response variable (y) that is explained by a linear model.
+
+Root Mean Squared Error (RMSE)
+𝑅𝑀𝑆𝐸=𝑀𝑆𝐸⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯√
+ 
+As you know, the Mean Squared Error measures the average of the squares of errors, where 'error' is the difference between the actual value ( 𝑦
+ ) and the estimated value ( ŷ
+ ). Another metric that is related to MSE is Root Mean Squared Error (RMSE) and is simply the square root of MSE.
+
+We first need to test the lm_model_weather and lm_model_all models against the test dataset test_data, and generate RENTED_BIKE_COUNT prediction results.
+
+TODO: Make predictions on the testing dataset using both lm_model_weather and lm_model_all models
+
+
+```{r}
+predictions_weather <- predict(lm_model_weather, new_data = test_data %>% select(-RENTED_BIKE_COUNT))
+predictions_all <- predict(lm_model_all, new_data = test_data %>% select(-RENTED_BIKE_COUNT))
+```
+
+```{r}
+rmse_weather <- rmse(test_data$RENTED_BIKE_COUNT, pull(predictions_weather))
+rmse_all <- rmse(test_data$RENTED_BIKE_COUNT, pull(predictions_all))
+
+print(paste("RMSE for lm_model_weather:", rmse_weather))
+print(paste("RMSE for lm_model_all:", rmse_all))
+```
+lm_model_weather: 500.39
+lm_model_all: 376.65
+A lower RMSE value indicates a better fit of the model to the data, so lm_model_all appears to be the better model.
+
+From these tables, you should find that the test results from lm_model_all are much better. It means that using both weather and datetime variables in the model generates better prediction results.
+
+Since lm_model_all has many predictor variables, let's check which predictor variables have larger coefficients. Variables with larger coefficients in the model means they attribute more in the prediction of RENTED_BIKE_COUNT. In addition, since all predictor variables are normalized to the same scale, 0 to 1, we thus can compare their coefficients directly.
+
+You could try building another regression model using the non-normalized seoul_bike_sharing_converted.csv dataset, and you would find that the coefficients are much different.
+
+First let's print all coefficients:
+
+```{r, fig.width=5, fig.height=8}
+# Extracting coefficients and creating a dataframe
+coeffs <- lm_model_all$fit$fit$fit$coefficients
+coeffs_df <- as.data.frame(abs(coeffs))
+coeffs_df$names <- rownames(coeffs_df)
+colnames(coeffs_df)[1] <- "coeffs" # Renaming the coefficient column
+
+# Sorting the coefficients in descending order
+coeffs_df <- coeffs_df[order(-coeffs_df$coeffs),]
+
+coeffs_df$names <- gsub("`", "", coeffs_df$names)
+coeffs_df$names <- gsub("\\\\", "", coeffs_df$names)
+
+# Plotting the coefficients using ggplot2
+ggplot(coeffs_df %>% filter(!is.na(coeffs)), aes(x = reorder(names, coeffs), y = coeffs)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("Variables") +
+  ylab("Coefficient Value") +
+  ggtitle("Coefficient Values of lm_model_all")
+```
+The factors "rainfall," "humidity," and "dew point temperature" appearing as the most important predictors in the regression model for bike rentals can be summarized for their significance as follows:
+
+Rainfall:
+
+Direct Impact on Comfort: Rain can directly affect the comfort level of riding a bike. Wet conditions make roads slippery and increase the risk of accidents.
+Perceived Inconvenience: People may perceive riding a bike in the rain as inconvenient or uncomfortable, especially without proper gear.
+Alternative Transportation: During rainy weather, potential bikers might opt for public transportation or private vehicles to stay dry.
+Humidity:
+
+Physical Discomfort: High humidity can make physical exertion feel more strenuous, leading to discomfort during biking.
+Impact on Health: Extremely high or low humidity might have health implications for some individuals, making them less likely to engage in physical activities like biking.
+Seasonal Patterns: Humidity might also correlate with certain seasons, where people's biking behavior might change due to weather patterns and associated activities.
+Dew Point Temperature:
+
+Indication of Moisture: Dew point temperature is a measure of moisture in the air. A higher dew point indicates more moisture, which can relate to muggy or uncomfortable conditions.
+Relation with Weather Conditions: High dew point temperatures often correlate with cloudy or rainy weather, which, as already mentioned, can deter biking.
+Human Perception: The dew point gives a good indication of how people might feel while outside. A higher dew point feels more humid, and humidity, as noted, affects comfort while biking.
+
+```{r}
+comparison_data <- data.frame(Predictions = pull(predictions_all), Actual = test_data$RENTED_BIKE_COUNT)
+
+ggplot(comparison_data, aes(x = Actual, y = Predictions)) +
+  geom_point() +                   # Scatter plot of actual vs predictions
+  geom_smooth(method = 'lm') +     # Linear regression line
+  ggtitle("Actual vs Predicted") +
+  xlab("Actual Rented Bike Count") +
+  ylab("Predicted Rented Bike Count")
+```
+This will create a scatter plot showing the relationship between the actual and predicted values. Points closer to the diagonal line indicate predictions that are closer to the actual values, while points further from the line indicate larger errors.
+
+
+```{r}
+
+
+comparison_data$Index <- 1:nrow(comparison_data)
+
+comparison_data_long <- comparison_data %>%
+  pivot_longer(cols = c("Actual", "Predictions"), names_to = "Type", values_to = "Count")
+
+ggplot(comparison_data_long, aes(x = Index, y = Count, color = Type)) +
+  geom_line() +
+  ggtitle("Actual vs Predicted Rented Bike Count") +
+  xlab("Index") +
+  ylab("Count")
+```
+
