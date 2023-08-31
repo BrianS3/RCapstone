@@ -1,0 +1,335 @@
+---
+title: "Improving Linear Models"
+author: "Brian Seko"
+date: "2023-08-18"
+output: html_document
+---
+
+Lab Overview:
+Now you have built a baseline regression model with some relatively good RMSE and R-squared reported values. However, we could still improve it by using methods like adding polynomial and interaction terms, regularization, and so on.
+
+In this lab, you will be asked to continue using tidymodels to improve the performance of baseline model:
+
+  TASK: Add polynomial terms
+  TASK: Add interactions terms
+  TASK: Add regularizations terms
+  TASK: Experiment to search for improved models
+
+```{r setup, include=FALSE}
+library(tidymodels)
+library(tidyverse)
+library(stringr)
+library(glmnet)
+library(dials)
+```
+
+The processed Seoul bike sharing dataset seoul_bike_sharing_converted_normalized.csv, includes the converted indicator variables, and the numerical variables have been normalized. Let's read it as a dataframe first:
+
+```{r}
+# Dataset URL
+dataset_url <- "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-RP0321EN-SkillsNetwork/labs/datasets/seoul_bike_sharing_converted_normalized.csv"
+bike_sharing_df <- read_csv(dataset_url)
+spec(bike_sharing_df)
+```
+
+
+We won't be using the DATE column, because 'as is', it basically acts like an data entry index. (However, given more time, we could use the DATE colum to create a 'day of week' or 'isWeekend' column, which we might expect has an affect on preferred bike rental times.) We also do not need the FUNCTIONAL DAY column because it only has one distinct value remaining (YES) after missing value processing.
+
+```{r}
+bike_sharing_df <- bike_sharing_df %>% 
+                   select(-DATE, -FUNCTIONING_DAY)
+```
+
+Define a linear regression model specification.
+
+```{r}
+lm_spec <- linear_reg() %>%
+  set_engine("lm") %>% 
+  set_mode("regression")
+```
+
+Split the data into training and testing datasets.
+
+```{r}
+set.seed(1234)
+data_split <- initial_split(bike_sharing_df, prop = 4/5)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+Now we are ready to refine the previous baseline regression model.
+
+# TASK: Add polynomial terms
+
+Linear regression models are the most suitable models to capture the linear correlations among variables. However, in real world data, many relationships may be non-linear.
+
+For example, the correlation between RENTED_BIKE_COUNT and TEMPERATURE does not look like linear:
+
+```{r}
+ggplot(data = train_data, aes(RENTED_BIKE_COUNT, TEMPERATURE)) + 
+    geom_point() 
+```
+
+One solution to handle such nonlinearity is using polynomial regression by adding polynomial terms. As shown before, higher order polynomials are better than the first order polynomial.  
+
+
+```{r}
+# Plot the higher order polynomial fits
+ggplot(data=train_data, aes(RENTED_BIKE_COUNT, TEMPERATURE)) + 
+    geom_point() + 
+    geom_smooth(method = "lm", formula = y ~ x, color="red") + 
+    geom_smooth(method = "lm", formula = y ~ poly(x, 2), color="yellow") + 
+    geom_smooth(method = "lm", formula = y ~ poly(x, 4), color="green") + 
+    geom_smooth(method = "lm", formula = y ~ poly(x, 6), color="blue")
+```
+OK, let's add some higher order polynomials of important variables to the regression models
+
+TODO: Fit a linear regression model lm_poly with higher order polynomial terms on the important variables (larger coefficients) found in the baseline model
+
+```{r}
+# Fit a linear model with higher order polynomial on some important variables 
+# #HINT: Use ploy function to build polynomial terms, lm_poly <- RENTED_BIKE_COUNT ~ poly(TEMPERATURE, 6) + poly(HUMIDITY, 4) .....
+
+lm_poly <- lm(RENTED_BIKE_COUNT ~ poly(TEMPERATURE, 6) + poly(HUMIDITY, 4), data = bike_sharing_df)
+summary(lm_poly$fit)
+```
+TODO: Make predictions on test dataset using the lm_poly models
+
+```{r}
+# Make predictions on the test dataset using the lm_poly model
+test_data$predictions <- predict(lm_poly, newdata = test_data)
+```
+
+Another minor improvement we could do here is to convert all negative prediction results to zero, because we can not have negative rented bike counts
+
+```{r}
+# e.g., test_results[test_results<0] <- 0
+# Convert all negative prediction results to zero
+test_data$predictions[test_data$predictions < 0] <- 0
+```
+
+Calculate R-squared and RMSE from the test results
+
+```{r}
+# Create a tibble with the truth and estimates
+results <- tibble(
+  truth = test_data$RENTED_BIKE_COUNT,
+  estimate = test_data$predictions
+)
+
+# Calculate RMSE
+rmse_results <- rmse(results, truth = truth, estimate = estimate)
+cat("RMSE:", rmse_results$.estimate, "\n")
+
+# Calculate R-squared
+rsq_results <- rsq(results, truth = truth, estimate = estimate)
+cat("R-squared:", rsq_results$.estimate)
+
+```
+If you include all variables, and additionally include some of the more important ones as higher order poly terms, then you should notice improved R-squared and RMSE values.
+
+# TASK: Add interaction terms
+In real-world scenarios, in addition to non-linear relationships between response variables and predictor variables, you may also encounter relationships among variables called interaction effects.
+
+For example, the effect of predictor variable TEMPERATURE on RENTED_BIKE_COUNT may also depend on other variables such as HUMIDITY, RAINFALL, or both (they interact) and the effect of SEASON on RENTED_BIKE_COUNT may also depend on HOLIDAY, HOUR, or both.
+
+To capture such interaction effects, we could add some interaction terms such as RAINFALL*HUMIDITY to the regression model, similar to what we did with polynominal terms. In this task, you will explore and conduct some experiments to search for interaction terms which will improve the model performance.
+
+TODO: Try adding some interaction terms to the previous polynomial models.
+
+Add interaction terms to the poly regression built in previous step
+
+HINT: You could use `*` operator to create interaction terms such as HUMIDITY*TEMPERATURE and make the formula look like:
+RENTED_BIKE_COUNT ~ RAINFALL*HUMIDITY ..
+
+Print model summary
+
+Calculate R-squared and RMSE for the new model to see if performance has improved
+
+```{r}
+# Adding interaction terms to the polynomial regression
+lm_poly_interaction <- lm(RENTED_BIKE_COUNT ~ poly(TEMPERATURE, 6) + poly(HUMIDITY, 4) + RAINFALL*HUMIDITY, data = train_data)
+
+# Print model summary
+summary(lm_poly_interaction)
+
+# Make predictions on the test dataset
+test_data$predictions_interaction <- predict(lm_poly_interaction, newdata = test_data)
+
+# Convert negative predictions to zero
+test_data$predictions_interaction[test_data$predictions_interaction < 0] <- 0
+
+# Create a tibble with the truth and estimates
+results_interaction <- tibble(
+  truth = test_data$RENTED_BIKE_COUNT,
+  estimate = test_data$predictions_interaction
+)
+
+# Calculate RMSE
+rmse_results_interaction <- rmse(results_interaction, truth = truth, estimate = estimate)
+cat("RMSE:", rmse_results_interaction$.estimate, "\n")
+
+# Calculate R-squared
+rsq_results_interaction <- rsq(results_interaction, truth = truth, estimate = estimate)
+cat("R-squared:", rsq_results_interaction$.estimate)
+
+```
+
+  1. Model Summary: The model includes higher-order polynomial terms for temperature and humidity and an interaction term between rainfall and humidity. The coefficients show the estimated effect each term has on the rented bike count.
+
+  2. Significance: Most of the polynomial terms and interaction terms are highly significant (p < 0.05), except some higher-order temperature polynomial terms and one humidity polynomial term.
+
+  3. R-squared: The R-squared value of approximately 0.49 indicates that the model explains about 49% of the variance in the rented bike count. This is a moderate level of explanatory power, and you may want to explore further to improve this.
+
+  4. RMSE: The Root Mean Squared Error (RMSE) of around 452.07 indicates the typical error in the model's predictions. It gives a sense of how off the predictions are on average.
+
+  5. Residuals: The residuals (the differences between the observed and predicted values) have a wide range, with some substantial negative and positive values. This could suggest some inconsistencies in the model's performance across the data set.
+
+  6. Warning: The warning about rank deficiency implies that there might be multicollinearity in the predictors. In other words, some predictors might be linearly dependent on others, which can affect the stability and interpretability of the coefficients.
+
+  7. Interaction Effect: The positive coefficient for the RAINFALL*HUMIDITY interaction term suggests that the effect of rainfall on rented bike count changes depending on the humidity level.
+
+
+  * Model Overview: Utilized polynomial terms for temperature and humidity, and interaction between rainfall and humidity to predict bike rentals.
+  * Performance Metrics:
+  ** R-squared: 49% (Moderate explanatory power)
+  ** RMSE: 452.07 (Average prediction error)
+  ** Significant Interactions: Rainfall and humidity interaction highlights complex relationship affecting bike rentals.
+
+Considerations & Next Steps: Warning suggests potential multicollinearity. Exploration of additional features or different models may enhance predictions.
+
+
+# TASK: Add regularization
+In previous tasks, you were asked to add polynominal and interaction terms to the model, aiming to capture nonlinearity and interaction effects between the predictor variables. Hopefully, your updated models have better R-squared and RMSE values.
+
+However, adding these terms makes your model more complicated, more difficult to explain, and more likely to suffer from overfitting. To overcome these issues, one solution is to add regularization terms to your models.
+
+When building the baseline model, we used the basic lm engine. In this task, you will use a more advanced and generalized glmnet engine. It provides a generalized linear model with Lasso, Ridge, and Elastic Net regularizations.
+
+In general, using glmnet can enhance your models in the following ways:
+
+Address overfitting issues by shrinking the coefficients
+Address predictor variable colinearity by selecting only one variable from each group of colinear variables (by shrinking their coefficients to zero)
+Make your models more interpretable due to simplification (fewer variables in the outcome models)
+Now, let's switch our regression engine to glmnet
+
+TODO: Define a linear regression model specification glmnet_spec using glmnet engine
+
+```{r}
+# Define the columns to evaluate and the degrees for polynomial features
+columns_to_evaluate <- c("TEMPERATURE", "HUMIDITY", "WIND_SPEED", "VISIBILITY")
+degrees <- 1:6
+
+# Store the best RMSE and configuration
+best_overall_rmse <- Inf
+best_overall_params <- NULL
+best_overall_formula <- NULL
+
+# Iterate through each combination of columns
+for (num_cols in 2:length(columns_to_evaluate)) {
+  col_combinations <- combn(columns_to_evaluate, num_cols)
+  
+  for (i in 1:ncol(col_combinations)) {
+    col_combination <- col_combinations[, i]
+    
+    for (degree in degrees) {
+      # Create a formula with the current column combination and degree
+      col_names <- paste(col_combination, collapse = "+")
+      formula_text <- paste("RENTED_BIKE_COUNT ~ poly(", col_names, ",", degree, ") + RAINFALL*HUMIDITY")
+      
+      # Create a recipe
+      rec <- recipe() %>%
+        step_dummy(all_nominal(), one_hot = TRUE) %>%
+        step_zv(all_numeric()) %>%
+        update_role(all_outcomes(), new_role = "outcome") %>%
+        update_formula(as.formula(formula_text))
+
+      # Create a workflow
+      workflow <- workflow() %>%
+        add_recipe(rec) %>%
+        add_model(glmnet_spec)
+
+      # Conduct grid search
+      tuned_glmnet <- tune_grid(
+        workflow,
+        resamples = cv_folds,  # Define cv_folds appropriately
+        grid = hyper_grid      # Define hyper_grid appropriately
+      )
+
+      # Get the best model and RMSE
+      best_metrics <- tuned_glmnet %>% collect_metrics()
+      best_rmse <- min(best_metrics$rmse, na.rm = TRUE)
+      print(paste("Best RMSE for columns", col_names, "with degree", degree, ":", best_rmse))
+
+      # Check if this RMSE is the best so far
+      if (best_rmse < best_overall_rmse) {
+        best_overall_rmse <- best_rmse
+        best_overall_params <- tuned_glmnet %>% select_best(metric = "rmse")
+        best_overall_formula <- formula_text
+      }
+    }
+  }
+}
+
+# Print the best overall RMSE
+print(paste("Best overall RMSE:", best_overall_rmse))
+
+
+```
+
+```{r}
+# Finalize the best model using the best parameters
+final_model <- finalize_model(glmnet_spec, best_overall_params)
+
+# Fit the model using the best formula and training data
+fitted_model <- fit(final_model, best_overall_formula, data = train_data)
+
+# Make predictions on the test data
+predictions_all <- predict(fitted_model, new_data = test_data)
+
+
+
+```
+
+This approach is akin to fine-tuning a musical instrument, trying different combinations, and playing various tunes until the perfect melody is found. It combines thoughtful guidance, systematic experimentation, and robust testing to find the best way to make predictions for the given task. It's more optimal because it aims to find the most accurate yet simple solution, balancing complexity and performance.
+
+
+```{r}
+# Finalize the best model
+final_model <- finalize_model(glmnet_spec, best_params)
+
+# Fit the model using training data
+fitted_model <- fit(final_model, formula, data = train_data)
+
+# Make predictions on the test data
+predictions_all <- predict(fitted_model, new_data = test_data)
+
+# Replicate the first chart
+comparison_data <- data.frame(Predictions = pull(predictions_all), Actual = test_data$RENTED_BIKE_COUNT)
+ggplot(comparison_data, aes(x = Actual, y = Predictions)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  ggtitle("Actual vs Predicted") +
+  xlab("Actual Rented Bike Count") +
+  ylab("Predicted Rented Bike Count")
+
+# Replicate the second chart
+comparison_data$Index <- 1:nrow(comparison_data)
+comparison_data_long <- comparison_data %>%
+  pivot_longer(cols = c("Actual", "Predictions"), names_to = "Type", values_to = "Count")
+ggplot(comparison_data_long, aes(x = Index, y = Count, color = Type)) +
+  geom_line() +
+  ggtitle("Actual vs Predicted Rented Bike Count") +
+  xlab("Index") +
+  ylab("Count")
+
+# 3) Create Q-Q plot
+truth <- test_data$RENTED_BIKE_COUNT
+prediction <- pull(predictions_all)
+ggplot() +
+  stat_qq(aes(sample = truth), color = 'green') +
+  stat_qq(aes(sample = prediction), color = 'red')
+
+```
+
+

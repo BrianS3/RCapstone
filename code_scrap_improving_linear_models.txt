@@ -1,0 +1,43 @@
+# Define grid of hyperparameters
+penalty_param <- penalty(range = c(0.01, 1))
+penalty_grid <- grid_regular(penalty_param, levels = 20)
+mixture_grid <- grid_regular(mixture(), levels = 10)
+
+# Combine them
+hyper_grid <- crossing(penalty_grid, mixture_grid)
+
+# Define model specification
+glmnet_spec <- linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet")
+
+# Define the formula
+formula <- RENTED_BIKE_COUNT ~ poly(TEMPERATURE, 6) + poly(HUMIDITY, 4) + RAINFALL*HUMIDITY
+
+# Create a workflow
+workflow <- workflow() %>%
+  add_model(glmnet_spec) %>%
+  add_formula(formula)
+
+# Define resampling (e.g., 5-fold cross-validation)
+cv_folds <- vfold_cv(train_data, v = 5)
+
+# Conduct grid search
+tuned_glmnet <- tune_grid(
+  workflow, # Use the workflow here
+  resamples = cv_folds,
+  grid = hyper_grid # This should be the grid you defined earlier
+)
+
+# Get the best model
+best_model <- tuned_glmnet %>% select_best("rmse")
+
+# Collect metrics and find the best RMSE
+best_metrics <- tuned_glmnet %>% collect_metrics()
+best_rmse <- best_metrics %>% filter(.metric == "rmse") %>% arrange(mean) %>% slice_head(n = 1)
+print(paste("Best RMSE:", best_rmse$mean))
+
+# Extract best parameters
+best_params <- best_model %>%
+  select(penalty, mixture)
+
+print(best_model)
